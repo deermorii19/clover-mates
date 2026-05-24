@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clover Mates</title>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        :root {
+            --green-50:  #f0faf4;
+            --green-100: #d9f2e3;
+            --green-200: #b3e6c8;
+            --green-300: #6fcf97;
+            --green-400: #3db87a;
+            --green-500: #27ae60;
+            --green-600: #1e8c4d;
+            --bubble-me:    #3db87a;
+            --bubble-peer:  #ffffff;
+            --bg:           #edf8f1;
+            --surface:      #ffffff;
+            --border:       rgba(61,184,122,.15);
+            --text-main:    #1a2e22;
+            --text-muted:   #7ca38a;
+            --shadow-card:  0 4px 20px rgba(39,174,96,.08);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Quicksand', 'Nunito', sans-serif;
+            background: var(--bg);
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            color: var(--text-main);
+        }
+        body::before {
+            content: '';
+            position: fixed; inset: 0;
+            background-image:
+                radial-gradient(circle at 15% 20%, rgba(111,207,151,.10) 0%, transparent 40%),
+                radial-gradient(circle at 85% 80%, rgba(61,184,122,.08) 0%, transparent 35%),
+                radial-gradient(circle at 50% 50%, rgba(179,230,200,.06) 0%, transparent 60%);
+            pointer-events: none; z-index: 0;
+        }
+
+        /* Header */
+        header {
+            position: relative; z-index: 10;
+            background: rgba(255,255,255,.88);
+            backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+            padding: 14px 20px; text-align: center;
+            font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 17px;
+            letter-spacing: .3px; color: var(--green-600);
+            border-bottom: 1.5px solid var(--border);
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        header .logo-icon { font-size: 22px; animation: gentle-spin 8s linear infinite; }
+        @keyframes gentle-spin {
+            0%{transform:rotate(0deg)} 25%{transform:rotate(5deg)} 75%{transform:rotate(-5deg)} 100%{transform:rotate(0deg)}
+        }
+        #header-status-dot {
+            width: 8px; height: 8px; border-radius: 50%; background: #ccc;
+            margin-left: 6px; flex-shrink: 0; transition: background .4s;
+        }
+        #header-status-dot.online  { background: var(--green-400); box-shadow: 0 0 0 3px rgba(61,184,122,.25); }
+        #header-status-dot.waiting { background: #f4b942; box-shadow: 0 0 0 3px rgba(244,185,66,.25); animation: pulse-dot 1.8s ease-in-out infinite; }
+        @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+
+        /* Screens */
+        .screen { display: none; flex: 1; flex-direction: column; justify-content: center; align-items: center; padding: 28px; text-align: center; position: relative; z-index: 1; }
+        .screen.active { display: flex; }
+
+        /* Wait */
+        .clover-anim { font-size: 56px; margin-bottom: 24px; animation: clover-bounce 2.4s ease-in-out infinite; filter: drop-shadow(0 4px 12px rgba(39,174,96,.25)); }
+        @keyframes clover-bounce {
+            0%,100%{transform:translateY(0) rotate(0deg)} 30%{transform:translateY(-8px) rotate(6deg)} 60%{transform:translateY(-4px) rotate(-4deg)}
+        }
+        .wait-card { background: var(--surface); border-radius: 24px; padding: 28px 28px 24px; max-width: 340px; width: 100%; box-shadow: var(--shadow-card), 0 1px 0 var(--border); border: 1.5px solid var(--border); }
+        .wait-card h2 { font-family: 'Nunito', sans-serif; font-size: 18px; font-weight: 800; color: var(--green-600); margin-bottom: 12px; line-height: 1.35; }
+        .status-box { font-size: 14px; color: var(--text-muted); line-height: 1.65; padding: 14px 16px; background: var(--green-50); border-radius: 14px; border: 1.5px solid var(--green-100); margin-top: 4px; }
+        .progress-bar { height: 4px; border-radius: 99px; background: var(--green-100); margin-top: 20px; overflow: hidden; }
+        .progress-bar-inner { height: 100%; width: 40%; background: linear-gradient(90deg, var(--green-300), var(--green-400)); border-radius: 99px; animation: progress-slide 1.8s ease-in-out infinite; }
+        @keyframes progress-slide { 0%{margin-left:-40%} 100%{margin-left:100%} }
+
+        /* Chat */
+        #chat-screen { justify-content: flex-start; align-items: stretch; padding: 0; }
+        #message-list { flex: 1; overflow-y: auto; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth; }
+        .sys-label { text-align: center; font-size: 11.5px; color: var(--text-muted); background: rgba(255,255,255,.7); border: 1px solid var(--border); border-radius: 99px; padding: 3px 12px; align-self: center; margin: 4px 0; letter-spacing: .3px; }
+
+        /* Bubbles */
+        .msg-row { display: flex; flex-direction: column; }
+        .msg-row.me   { align-items: flex-end; }
+        .msg-row.peer { align-items: flex-start; }
+        .msg {
+            max-width: 74%; padding: 11px 16px;
+            border-radius: 20px; font-size: 15px; line-height: 1.5;
+            word-break: break-word; box-shadow: 0 2px 8px rgba(0,0,0,.06);
+            position: relative; transition: transform .12s;
+        }
+        .msg:active { transform: scale(.98); }
+        .msg.me   { background: var(--bubble-me); color: #fff; border-bottom-right-radius: 5px; }
+        .msg.peer { background: var(--bubble-peer); color: var(--text-main); border-bottom-left-radius: 5px; border: 1.5px solid var(--border); }
+        .msg img  { max-width: 100%; max-height: 240px; object-fit: cover; border-radius: 12px; display: block; cursor: pointer; }
+        .msg-meta { font-size: 10.5px; margin-top: 5px; letter-spacing: .2px; display: flex; align-items: center; gap: 4px; }
+        .msg.me   .msg-meta { color: rgba(255,255,255,.65); justify-content: flex-end; }
+        .msg.peer .msg-meta { color: var(--text-muted); justify-content: flex-start; }
+
+        /* Read receipt */
+        .read-tick { font-size: 11px; line-height: 1; }
+        .read-tick.unread { opacity: .5; }
+        .read-tick.read   { opacity: 1; color: #a8f0c6; }
+        .msg.peer .read-tick { display: none; } /* only show on own msgs */
+
+        /* Tail */
+        .msg.me::after   { content:''; position:absolute; bottom:0; right:-6px; width:12px; height:12px; background:var(--bubble-me); clip-path:polygon(0 0,0 100%,100% 100%); }
+        .msg.peer::after { content:''; position:absolute; bottom:0; left:-6px;  width:12px; height:12px; background:var(--bubble-peer); clip-path:polygon(100% 0,0 100%,100% 100%); }
+
+        /* Input */
+        .input-area {
+            background: rgba(255,255,255,.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 10px 14px; border-top: 1.5px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+        }
+        .icon-btn { background: var(--green-50); border: 1.5px solid var(--border); width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; transition: background .2s, transform .12s; flex-shrink: 0; user-select: none; }
+        .icon-btn:active { background: var(--green-100); transform: scale(.94); }
+        #text-input { flex: 1; border: 1.5px solid var(--border); background: var(--green-50); padding: 10px 16px; border-radius: 22px; font-size: 15px; font-family: 'Quicksand', sans-serif; outline: none; transition: border-color .2s, box-shadow .2s, background .2s; color: var(--text-main); }
+        #text-input::placeholder { color: var(--text-muted); }
+        #text-input:focus { border-color: var(--green-300); background: #fff; box-shadow: 0 0 0 3.5px rgba(111,207,151,.18); }
+        .send-btn { background: linear-gradient(135deg, var(--green-400), var(--green-500)); color: #fff; border: none; width: 40px; height: 40px; border-radius: 50%; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: 0 2px 8px rgba(39,174,96,.28); transition: transform .12s, box-shadow .2s; }
+        .send-btn:active { transform: scale(.92); box-shadow: 0 1px 4px rgba(39,174,96,.2); }
+
+        /* Error */
+        .error-card { background: var(--surface); padding: 32px 28px; border-radius: 24px; box-shadow: var(--shadow-card); max-width: 320px; border: 1.5px solid var(--border); text-align: center; }
+        .error-icon { font-size: 52px; margin-bottom: 16px; }
+        .error-card h2 { font-family: 'Nunito', sans-serif; font-size: 20px; font-weight: 800; color: var(--text-main); margin-bottom: 10px; }
+        .error-card p  { font-size: 14px; color: var(--text-muted); line-height: 1.65; }
+
+        /* Upload overlay */
+        #upload-overlay { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.75); backdrop-filter: blur(8px); z-index: 100; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
+        #upload-overlay.show { display: flex; }
+        #upload-overlay .leaf { font-size: 40px; animation: clover-bounce 1.2s ease-in-out infinite; }
+        #upload-overlay p { font-family: 'Nunito', sans-serif; font-weight: 700; color: var(--green-600); font-size: 15px; }
+
+        /* Scrollbar */
+        #message-list::-webkit-scrollbar { width: 4px; }
+        #message-list::-webkit-scrollbar-track { background: transparent; }
+        #message-list::-webkit-scrollbar-thumb { background: var(--green-200); border-radius: 99px; }
+
+        @keyframes bubble-in-me   { from{opacity:0;transform:translateX(12px) scale(.95)} to{opacity:1;transform:none} }
+        @keyframes bubble-in-peer { from{opacity:0;transform:translateX(-12px) scale(.95)} to{opacity:1;transform:none} }
+        .msg-row.me   .msg { animation: bubble-in-me   .22s ease-out; }
+        .msg-row.peer .msg { animation: bubble-in-peer .22s ease-out; }
+    </style>
+</head>
+<body>
+
+<header>
+    <span class="logo-icon">🍀</span>
+    <span id="app-header-text">Clover Mates</span>
+    <span id="header-status-dot" class="waiting"></span>
+</header>
+
+<div id="wait-screen" class="screen active">
+    <div class="clover-anim">🍀</div>
+    <div class="wait-card">
+        <h2 id="wait-title">已成功登入，<br>等待夥伴上線中...</h2>
+        <div id="wait-status" class="status-box">正在確認與 Clover Mates 的連線軌跡...</div>
+        <div class="progress-bar"><div class="progress-bar-inner"></div></div>
+    </div>
+</div>
+
+<div id="chat-screen" class="screen">
+    <div id="message-list">
+        <div class="sys-label">🍀 Clover Mates Chatroom 已開啟</div>
+    </div>
+    <div class="input-area">
+        <button class="icon-btn" id="photo-btn" title="傳送圖片">📷</button>
+        <input type="text" id="text-input" placeholder="輸入訊息..." autocomplete="off">
+        <button class="send-btn" id="send-btn" title="發送">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
+    </div>
+</div>
+
+<div id="error-screen" class="screen">
+    <div class="error-card">
+        <div class="error-icon">🍂</div>
+        <h2>夥伴尚未上線</h2>
+        <p>已超過 10 分鐘無人配對，<br>時空密室已關閉。<br><br>若想再次體驗請重新感應裝置！</p>
+    </div>
+</div>
+
+<div id="upload-overlay">
+    <div class="leaf">🍀</div>
+    <p>正在傳送圖片...</p>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "AIzaSyBIcgimVLKBYnAuE6JC-WO9w6c1iRC1IC0",
+        authDomain: "clover-mates-chat.firebaseapp.com",
+        databaseURL: "https://clover-mates-chat-default-rtdb.firebaseio.com",
+        projectId: "clover-mates-chat",
+        storageBucket: "clover-mates-chat.firebasestorage.app",
+        messagingSenderId: "466171872631",
+        appId: "1:466171872631:web:15d19b66163e1be6f54d72"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // ── Constants ──
+    const MATCH_WINDOW_MS = 5 * 60 * 1000; // 5 分鐘內的 queue 記錄才有效
+    const MATCH_TIMEOUT_MS = 10 * 60 * 1000; // 等待超過 10 分鐘 → 顯示錯誤
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const myRole    = urlParams.get('role');
+    const peerRole  = myRole === 'A' ? 'B' : 'A';
+
+    // 用頁面載入時間 + role 當作唯一 session key，避免同裝置雙掃問題
+    const sessionId = `${myRole}_${Date.now()}_${Math.random().toString(36).slice(2,7)}`;
+
+    let currentRoomId     = null;
+    let myQueueKey        = null; // 自己在 lobby_queue 的 key，用來事後清除
+    let isConnected       = false;
+    let matchTimeoutTimer = null;
+    let chatStartedAt     = null;
+    let uploadInProgress  = false; // 防止重複觸發上傳
+
+    const waitScreen    = document.getElementById('wait-screen');
+    const chatScreen    = document.getElementById('chat-screen');
+    const errorScreen   = document.getElementById('error-screen');
+    const msgList       = document.getElementById('message-list');
+    const textInput     = document.getElementById('text-input');
+    const sendBtn       = document.getElementById('send-btn');
+    const uploadOverlay = document.getElementById('upload-overlay');
+    const statusDot     = document.getElementById('header-status-dot');
+
+    window.onload = function () {
+        if (myRole !== 'A' && myRole !== 'B') {
+            alert('網址參數錯誤，請確認網址包含 ?role=A 或 ?role=B');
+            return;
+        }
+        document.getElementById('app-header-text').innerText = `Clover Mates ${myRole}`;
+        // 先清掉自己 role 的舊記錄，再進入配對
+        cleanMyOldQueue().then(() => checkAndMatch());
+    };
+
+    // 離開頁面時清除自己的 queue（讓下一組不受影響）
+    window.addEventListener('beforeunload', () => {
+        if (myQueueKey) db.ref(`lobby_queue/${myQueueKey}`).remove();
+    });
+
+    /* ══════════════════════════════════════════
+       STEP 1 — 清除自己 role 的所有舊 queue 記錄
+    ══════════════════════════════════════════ */
+    function cleanMyOldQueue() {
+        return new Promise((resolve) => {
+            db.ref('lobby_queue').once('value', (snap) => {
+                const queue = snap.val();
+                if (!queue) { resolve(); return; }
+                const removes = Object.keys(queue)
+                    .filter(k => queue[k].role === myRole)
+                    .map(k => db.ref(`lobby_queue/${k}`).remove());
+                Promise.all(removes).then(resolve).catch(resolve);
+            });
+        });
+    }
+
+    /* ══════════════════════════════════════════
+       STEP 2 — 進入 lobby，嘗試配對
+    ══════════════════════════════════════════ */
+    function checkAndMatch() {
+        db.ref('lobby_queue').transaction((queue) => {
+            const now = Date.now();
+            if (!queue) queue = {};
+
+            // 先清掉所有過期記錄（避免舊資料干擾）
+            for (let k in queue) {
+                if (now - queue[k].timestamp > MATCH_WINDOW_MS) delete queue[k];
+            }
+
+            // 找對方 role 中最早進來的 waiting 記錄
+            let targetKey = null, earliest = Infinity;
+            for (let k in queue) {
+                const item = queue[k];
+                if (item.role === peerRole && item.status === 'waiting') {
+                    if (item.timestamp < earliest) { earliest = item.timestamp; targetKey = k; }
+                }
+            }
+
+            if (targetKey) {
+                // 找到對方 → 雙方都標 matched，共用同一個 roomId
+                const roomId = queue[targetKey].roomId;
+                queue[targetKey].status = 'matched';
+                queue[sessionId] = { role: myRole, status: 'matched', roomId, timestamp: now };
+            } else {
+                // 沒人等 → 自己進 waiting，建立新 roomId
+                queue[sessionId] = {
+                    role: myRole,
+                    status: 'waiting',
+                    roomId: `room_${now}_${myRole}`,
+                    timestamp: now
+                };
+            }
+            return queue;
+
+        }, (error, committed, snapshot) => {
+            if (error || !committed) {
+                // transaction 失敗（網路問題）→ 1秒後重試
+                setTimeout(checkAndMatch, 1000);
+                return;
+            }
+            myQueueKey = sessionId;
+            const queue = snapshot.val() || {};
+            const mine  = queue[sessionId];
+            if (!mine) return;
+
+            currentRoomId = mine.roomId;
+            const amISecond = mine.status === 'matched';
+
+            if (amISecond) {
+                document.getElementById('wait-title').innerText = '找到你的 Clover Mate 了！';
+                document.getElementById('wait-status').innerHTML =
+                    "<span style='color:#27ae60;font-weight:700;'>🟢 夥伴已在線上，即將進入聊天室...</span>";
+            } else {
+                document.getElementById('wait-title').innerText = '登入成功，等待夥伴上線中...';
+                document.getElementById('wait-status').innerHTML =
+                    "<span style='color:#f4b942;font-weight:600;'>🟡 Clover Mate 尚未上線</span>" +
+                    "<br><span style='color:#7ca38a;font-size:13px;display:block;margin-top:6px;'>請保持頁面開啟，夥伴感應後自動連線。</span>";
+            }
+
+            listenForMatch(currentRoomId, amISecond);
+            startMatchTimeout();
+        });
+    }
+
+    /* ══════════════════════════════════════════
+       STEP 3 — 監聽 lobby，等雙方都 matched 再進房
+    ══════════════════════════════════════════ */
+    function listenForMatch(roomId, amISecond) {
+        const queueRef = db.ref('lobby_queue');
+        queueRef.on('value', (snap) => {
+            if (isConnected) { queueRef.off(); return; }
+            const queue = snap.val() || {};
+            let myOk = false, peerOk = false;
+            for (let k in queue) {
+                const item = queue[k];
+                if (item.roomId !== roomId || item.status !== 'matched') continue;
+                if (item.role === myRole)   myOk   = true;
+                if (item.role === peerRole) peerOk = true;
+            }
+            if (myOk && peerOk) {
+                isConnected = true;
+                clearTimeout(matchTimeoutTimer);
+                queueRef.off();
+                // 進入聊天室後清除自己的 queue 記錄（讓空間給下一組）
+                db.ref(`lobby_queue/${myQueueKey}`).remove();
+                setTimeout(() => enterChatRoom(roomId), amISecond ? 1200 : 600);
+            }
+        });
+    }
+
+    /* ══════════════════════════════════════════
+       STEP 4 — 進入聊天室
+    ══════════════════════════════════════════ */
+    function enterChatRoom(roomId) {
+        document.getElementById('app-header-text').innerText = 'Clover Mates Chatroom';
+        statusDot.classList.remove('waiting');
+        statusDot.classList.add('online');
+        waitScreen.classList.remove('active');
+        errorScreen.classList.remove('active');
+        chatScreen.classList.add('active');
+
+        // 記錄進入時間，只接收這之後的訊息（防舊訊息重播）
+        chatStartedAt = Date.now() - 2000; // 往前 2 秒容錯 clock skew
+        listenToMessages(roomId);
+        listenToReadReceipts(roomId);
+    }
+
+    function startMatchTimeout() {
+        clearTimeout(matchTimeoutTimer);
+        matchTimeoutTimer = setTimeout(() => {
+            if (!isConnected) {
+                db.ref('lobby_queue').off();
+                if (myQueueKey) db.ref(`lobby_queue/${myQueueKey}`).remove();
+                waitScreen.classList.remove('active');
+                chatScreen.classList.remove('active');
+                errorScreen.classList.add('active');
+                statusDot.classList.remove('waiting');
+            }
+        }, MATCH_TIMEOUT_MS);
+    }
+
+    /* ══════════════════════════════════════════
+       訊息收發
+    ══════════════════════════════════════════ */
+    function listenToMessages(roomId) {
+        db.ref(`messages/${roomId}`)
+            .orderByChild('timestamp')
+            .startAt(chatStartedAt)
+            .on('child_added', (snap) => appendMessage(snap.key, snap.val()));
+    }
+
+    function appendMessage(msgKey, msg) {
+        if (!msg || !msg.role) return;
+        const isMe = msg.role === myRole;
+
+        const row    = document.createElement('div');
+        row.className = `msg-row ${isMe ? 'me' : 'peer'}`;
+        const bubble = document.createElement('div');
+        bubble.className = `msg ${isMe ? 'me' : 'peer'}`;
+
+        const tickHtml = isMe ? `<span class="read-tick unread" id="tick-${msgKey}">✓✓</span>` : '';
+        const metaHtml = `<div class="msg-meta"><span>${msg.time || ''}</span>${tickHtml}</div>`;
+
+        if (msg.type === 'text') {
+            bubble.innerHTML = `<div>${escapeHtml(msg.content || '')}</div>${metaHtml}`;
+        } else if (msg.type === 'image') {
+            const img = document.createElement('img');
+            img.src = msg.content;
+            img.alt = '圖片';
+            img.onclick = () => window.open(msg.content, '_blank');
+            const meta = document.createElement('div');
+            meta.className = 'msg-meta';
+            meta.innerHTML = `<span>${msg.time || ''}</span>${tickHtml}`;
+            bubble.appendChild(img);
+            bubble.appendChild(meta);
+        } else {
+            return; // 未知類型不顯示
+        }
+
+        row.appendChild(bubble);
+        msgList.appendChild(row);
+        msgList.scrollTop = msgList.scrollHeight;
+
+        if (!isMe && currentRoomId) markMessageRead(msgKey);
+    }
+
+    /* ─── 已讀回執 ─── */
+    function markMessageRead(msgKey) {
+        db.ref(`read_receipts/${currentRoomId}/${myRole}/${msgKey}`).set(true);
+    }
+
+    function listenToReadReceipts(roomId) {
+        db.ref(`read_receipts/${roomId}/${peerRole}`).on('child_added', (snap) => {
+            const tick = document.getElementById(`tick-${snap.key}`);
+            if (tick) { tick.classList.remove('unread'); tick.classList.add('read'); }
+        });
+    }
+
+    /* ─── 發送文字 ─── */
+    sendBtn.addEventListener('click', sendTextMessage);
+    textInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') sendTextMessage(); });
+
+    function sendTextMessage() {
+        const text = textInput.value.trim();
+        if (!text || !currentRoomId) return;
+        textInput.value = '';
+        db.ref(`messages/${currentRoomId}`).push({
+            role: myRole, type: 'text', content: text,
+            time: getTimeStr(), timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+
+    /* ─── 發送圖片（每次新建 input，防 iOS Safari 卡住）─── */
+    document.getElementById('photo-btn').addEventListener('click', () => {
+        if (!currentRoomId || uploadInProgress) return;
+
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        // 若使用者取消選擇（沒有 change 事件），30秒後自動清除
+        const cancelGuard = setTimeout(() => {
+            if (document.body.contains(input)) document.body.removeChild(input);
+        }, 30000);
+
+        input.addEventListener('change', function () {
+            clearTimeout(cancelGuard);
+            const file = this.files[0];
+            if (document.body.contains(input)) document.body.removeChild(input);
+            if (!file) return;
+
+            // 限制圖片大小 10MB（base64 後約 13MB，Firebase 單筆限制 ~16MB）
+            if (file.size > 10 * 1024 * 1024) {
+                alert('圖片太大（上限 10MB），請選擇較小的圖片。');
+                return;
+            }
+
+            uploadInProgress = true;
+            uploadOverlay.classList.add('show');
+
+            const reader = new FileReader();
+            reader.onloadend = function () {
+                db.ref(`messages/${currentRoomId}`).push({
+                    role: myRole, type: 'image', content: reader.result,
+                    time: getTimeStr(), timestamp: firebase.database.ServerValue.TIMESTAMP
+                }, (err) => {
+                    uploadInProgress = false;
+                    uploadOverlay.classList.remove('show');
+                    if (err) alert('圖片傳送失敗，請重試。');
+                });
+            };
+            reader.onerror = function () {
+                uploadInProgress = false;
+                uploadOverlay.classList.remove('show');
+                alert('讀取圖片失敗，請重試。');
+            };
+            reader.readAsDataURL(file);
+        });
+
+        input.click();
+    });
+
+    /* ─── 工具函式 ─── */
+    function getTimeStr() {
+        const n = new Date();
+        return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+    }
+    function escapeHtml(str) {
+        return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+</script>
+</body>
+</html>
